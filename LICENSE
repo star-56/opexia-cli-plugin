@@ -1,0 +1,57 @@
+OpexIA Instrument Plugin — Proprietary License
+Copyright (c) 2026 OpexIA. All rights reserved.
+
+This software and its accompanying files (the "Plugin") are proprietary to OpexIA.
+The Plugin is licensed, not sold. This is NOT open-source software.
+
+1. LICENSE GRANT.
+   Subject to your continuous compliance with this License, OpexIA grants you a
+   limited, non-exclusive, non-transferable, non-sublicensable, revocable license
+   to download, install, and use the Plugin in your own development environment
+   and coding tools solely to instrument your own applications for use with the
+   OpexIA service. Installing the Plugin into your own environment for your own
+   use is permitted.
+
+2. RESTRICTIONS.
+   Except as expressly permitted in Section 1, you may NOT, in whole or in part,
+   directly or indirectly:
+   (a) redistribute, republish, mirror, host, sublicense, sell, resell, rent,
+       lease, lend, or otherwise make the Plugin available to any third party, in
+       any form or by any means, whether or not for a fee;
+   (b) create, publish, or distribute derivative works, forks, or adaptations of
+       the Plugin, or incorporate the Plugin into another product offered to third
+       parties;
+   (c) reverse engineer, decompile, or disassemble the Plugin except to the extent
+       this restriction is prohibited by applicable law;
+   (d) remove, obscure, or alter any copyright, trademark, or other proprietary
+       notice; or
+   (e) use the Plugin to build or assist a competing product or service.
+
+3. OWNERSHIP.
+   The Plugin is and remains the exclusive property of OpexIA. OpexIA retains all
+   right, title, and interest in and to the Plugin, including all intellectual
+   property rights therein. No rights are granted except as expressly set out here.
+
+4. THIRD-PARTY COMPONENTS.
+   The Plugin references and interoperates with separately licensed software
+   (for example, the "opexia-trace" package and OpenTelemetry libraries). Those
+   components are governed by their own licenses; this License covers only the
+   Plugin's own files.
+
+5. NO WARRANTY.
+   THE PLUGIN IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY.
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL OPEXIA BE LIABLE FOR
+   ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE PLUGIN OR THE USE OR OTHER
+   DEALINGS IN THE PLUGIN.
+
+7. TERMINATION.
+   This License terminates automatically and immediately if you breach any of its
+   terms. Upon termination you must cease all use of the Plugin and destroy all
+   copies in your possession or control. Sections 2 through 6 survive termination.
+
+For licensing inquiries, contact OpexIA at https://opexia.dev.

@@ -1,0 +1,19 @@
+{
+  "name": "opexia",
+  "owner": {
+    "name": "OpexIA"
+  },
+  "description": "OpexIA developer tools for agentic coding CLIs.",
+  "plugins": [
+    {
+      "name": "opexia",
+      "source": ".",
+      "displayName": "OpexIA Instrument",
+      "description": "Detects your stack and instruments it for OpexIA observability the right way, then verifies a span lands with zero dead-letters.",
+      "category": "observability",
+      "tags": ["observability", "opentelemetry", "otlp", "tracing", "llm", "agents"],
+      "homepage": "https://opexia.dev",
+      "license": "LicenseRef-OpexIA-Proprietary"
+    }
+  ]
+}

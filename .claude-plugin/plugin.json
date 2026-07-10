@@ -1,0 +1,11 @@
+{
+  "name": "opexia",
+  "description": "Instrument any project for OpexIA observability — detects the stack, picks native OTLP vs the opexia-trace SDK vs direct HTTP, wires it correctly, and verifies a span lands.",
+  "version": "0.1.0",
+  "author": {
+    "name": "OpexIA"
+  },
+  "homepage": "https://opexia.dev",
+  "license": "LicenseRef-OpexIA-Proprietary",
+  "skills": ["./skills/"]
+}
