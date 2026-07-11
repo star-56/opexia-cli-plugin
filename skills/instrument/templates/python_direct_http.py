@@ -38,6 +38,23 @@ def new_span_id() -> str:
     return uuid.uuid4().hex[:16]       # 16 hex chars
 
 
+def render_prompt(messages: list) -> str:
+    """Render an LLM call's messages into `opexia.query_text`.
+
+    ON AN LLM SPAN, query_text IS THE PROMPT — it is what OpexIA versions, evaluates,
+    and measures a cacheable prefix from.
+
+    DO NOT do `" ".join(m["content"] for m in messages)`. Without a role boundary
+    there is nothing separating the authored system prompt from the per-call user
+    content, so OpexIA cannot mask the per-call parts out when deriving the prompt's
+    identity — and EVERY CALL then hashes as its own "prompt". The Prompts page fills
+    with thousands of one-call rows instead of one prompt with a version history.
+    """
+    return "\n\n".join(
+        f"{m.get('role', 'user')}:\n{m.get('content', '')}" for m in messages
+    )
+
+
 def build_span(
     *,
     trace_id: str,
@@ -54,10 +71,18 @@ def build_span(
     input_tokens: int = 0,
     output_tokens: int = 0,
     query_text: Optional[str] = None,      # earliest span (user question)
+                                           # ON AN LLM SPAN this is THE PROMPT —
+                                           # build it with render_prompt(), never a
+                                           # " ".join of the message contents.
     outcome_text: Optional[str] = None,    # latest span (final answer)
     sources: Optional[dict] = None,        # {consulted, used, dropped, scores}
     decision: Optional[dict] = None,       # {rules_fired, scores, selected, alternatives}
     cost_usd: Optional[float] = None,
+    temperature: Optional[float] = None,   # part of the shipped config — cheap, set it
+    max_tokens: Optional[int] = None,
+    prompt_id: Optional[str] = None,       # OPTIONAL — pin the prompt identity
+    prompt_label: Optional[str] = None,    # OPTIONAL — display name instead of a hash
+    prompt_version: Optional[str] = None,  # OPTIONAL — client hash (no-text privacy path)
 ) -> dict:
     # --- required tenancy envelope (flat dotted, primitive values) ---
     attrs: dict = {
@@ -74,15 +99,27 @@ def build_span(
     if end_user:
         attrs["opexia.end_user"] = end_user
     if query_text:
-        attrs["opexia.query_text"] = query_text        # PLAIN string
+        attrs["opexia.query_text"] = query_text[:16384]        # PLAIN string
     if outcome_text:
-        attrs["opexia.outcome_text"] = outcome_text     # PLAIN string
+        attrs["opexia.outcome_text"] = outcome_text[:16384]     # PLAIN string
+    # Prompt identity — FLAT keys. `opexia.prompt.id` (dotted) is NOT in the envelope
+    # and would dead-letter the whole span.
+    if prompt_id:
+        attrs["opexia.prompt_id"] = prompt_id
+    if prompt_label:
+        attrs["opexia.prompt_label"] = prompt_label
+    if prompt_version:
+        attrs["opexia.prompt_version"] = prompt_version
 
     # gen_ai.* — standard OpenTelemetry GenAI names (NOT under opexia extra=forbid)
     if gen_ai_system:
         attrs["gen_ai.system"] = gen_ai_system
     if model:
         attrs["gen_ai.request.model"] = model
+    if temperature is not None:
+        attrs["gen_ai.request.temperature"] = float(temperature)
+    if max_tokens:
+        attrs["gen_ai.request.max_tokens"] = int(max_tokens)
     if input_tokens:
         attrs["gen_ai.usage.input_tokens"] = int(input_tokens)
     if output_tokens:

@@ -21,11 +21,37 @@ dead-letter trap, and the CLI's agent instruments your actual code from it.
   - Anything with an HTTP client → direct HTTP.
   - Browser React / React Native → **refuses the client path** and routes through
     a server, so your API key never ships in a client bundle.
-- **Installs** the dependency, pinned correctly (`--pre`, `opexia-trace>=0.1.0a12`).
+- **Installs** the dependency, pinned correctly (`--pre`, `opexia-trace>=0.1.0a13`).
 - **Instruments** your code and enriches spans with the `opexia.*` intelligence
   attributes (sources, decision, reasoning, query/outcome text).
+- **Renders prompts so they can be versioned** — on an LLM span, `opexia.query_text`
+  *is the prompt*. The plugin knows to render it with role headers rather than
+  space-joining the messages, which is the difference between one prompt with a
+  version history and thousands of one-call rows in your Prompts page.
 - **Writes** canonical env placeholders into `.env.example` (never real secrets).
 - **Verifies** one span lands with zero dead-letters.
+
+## Ship Check — the PR gate that comes with it
+
+Once your prompts are traced, `opexia shipcheck` (ships in `opexia-trace`) checks a
+prompt / model / config change **before it merges**. It makes **no LLM call** and
+never re-runs your agent — it compares the candidate against the traces you already
+sent and does arithmetic:
+
+- token / cost-per-call / cost-per-month delta at your **measured** volume,
+- **prompt-cache safety** — did the edit push per-call content into the cacheable
+  prefix (which silently makes every call pay full price),
+- structure regressions — examples removed, output format dropped,
+- and a second, fully **local** gate that flags `CLAUDE.md`, `.claude/`,
+  `.cursorrules` or an MCP config **shipping inside your production artifact**.
+
+```bash
+pip install "opexia-trace[shipcheck]"
+opexia shipcheck            # exit 1 = the policy failed; 2 = the check could not run
+```
+
+Set `opexia.prompt_id` on your LLM spans (the plugin will offer to) so the gate can
+match a changed prompt to its baseline exactly.
 
 ## Install
 

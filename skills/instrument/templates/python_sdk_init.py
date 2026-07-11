@@ -44,6 +44,26 @@ import json
 from opentelemetry import trace as _ot_trace
 
 
+def render_prompt(messages: list[dict]) -> str:
+    """Render an LLM call's messages into `opexia.query_text`.
+
+    ON AN LLM SPAN, query_text IS THE PROMPT — it is what OpexIA versions, evaluates,
+    and measures a cacheable prefix from.
+
+    DO NOT do `" ".join(m["content"] for m in messages)`. Without a role boundary
+    there is nothing separating the authored system prompt from the per-call user
+    content, so OpexIA cannot mask the per-call parts out when deriving the prompt's
+    identity — and EVERY CALL then hashes as its own "prompt". The Prompts page fills
+    with thousands of one-call rows instead of one prompt with a version history.
+
+    (opexia-trace >= 0.1.0a13 does this for you on the auto-instrument path. You need
+    this helper when you render the text yourself.)
+    """
+    return "\n\n".join(
+        f"{m.get('role', 'user')}:\n{m.get('content', '')}" for m in messages
+    )
+
+
 def annotate_current_span(
     *,
     query_text: str | None = None,      # put on the EARLIEST span (user question)
@@ -55,14 +75,25 @@ def annotate_current_span(
     end_user: str | None = None,        # employee id/email → per-user alignment
     sources: dict | None = None,        # {consulted:[str], used:[str], dropped:[str], scores:{id:0..1}}
     decision: dict | None = None,       # {rules_fired:[str], scores:{}, selected:str, alternatives:[]}
+    prompt_id: str | None = None,       # OPTIONAL — pin the prompt identity (see render_prompt)
+    prompt_label: str | None = None,    # OPTIONAL — display name instead of a hash
+    prompt_version: str | None = None,  # OPTIONAL — client-computed hash (no-text privacy path)
 ) -> None:
     span = _ot_trace.get_current_span()
     if span is None:
         return
     if query_text:
-        span.set_attribute("opexia.query_text", query_text)        # PLAIN string
+        span.set_attribute("opexia.query_text", query_text[:16384])    # PLAIN string
     if outcome_text:
-        span.set_attribute("opexia.outcome_text", outcome_text)    # PLAIN string
+        span.set_attribute("opexia.outcome_text", outcome_text[:16384])  # PLAIN string
+    # Flat, un-dotted keys. `opexia.prompt.id` is NOT in the envelope and would
+    # dead-letter the whole span.
+    if prompt_id:
+        span.set_attribute("opexia.prompt_id", prompt_id)
+    if prompt_label:
+        span.set_attribute("opexia.prompt_label", prompt_label)
+    if prompt_version:
+        span.set_attribute("opexia.prompt_version", prompt_version)
     if reasoning_role:
         span.set_attribute("opexia.reasoning_role", reasoning_role)
     if node_type:

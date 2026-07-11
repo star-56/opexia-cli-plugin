@@ -97,8 +97,51 @@ export function setOpexiaReasoning(
  * (engines take first-non-empty query / last-non-empty outcome). ~16 KB cap.
  */
 export function setOpexiaText(span: Span, text: { query?: string; outcome?: string }): void {
-  if (text.query) span.setAttribute("opexia.query_text", text.query);
-  if (text.outcome) span.setAttribute("opexia.outcome_text", text.outcome);
+  if (text.query) span.setAttribute("opexia.query_text", text.query.slice(0, TEXT_CAP));
+  if (text.outcome) span.setAttribute("opexia.outcome_text", text.outcome.slice(0, TEXT_CAP));
+}
+
+/** OpexIA truncates text at 16 KB; slicing here keeps what we send == what is stored. */
+const TEXT_CAP = 16384;
+
+export interface ChatMessage { role: string; content: string }
+
+/**
+ * Render an LLM call's messages into `opexia.query_text`.
+ *
+ * ON AN LLM SPAN, query_text IS THE PROMPT — it is what OpexIA versions, evaluates,
+ * and measures a cacheable prefix from.
+ *
+ * DO NOT join the messages' content with a space. Without a role boundary there is
+ * nothing separating the authored system prompt from the per-call user content, so
+ * OpexIA cannot mask the per-call parts out when deriving the prompt's identity —
+ * and EVERY CALL then hashes as its own "prompt". The Prompts page fills with
+ * thousands of one-call rows instead of one prompt with a version history.
+ */
+export function renderPrompt(messages: ChatMessage[]): string {
+  return messages.map((m) => `${m.role ?? "user"}:\n${m.content ?? ""}`).join("\n\n");
+}
+
+/**
+ * OPTIONAL — pin a prompt's identity instead of letting OpexIA derive it.
+ *
+ * `id` makes grouping exact (and lets the `opexia shipcheck` CI gate match a changed
+ * prompt to its baseline without guessing). `label` is the display name.
+ *
+ * PRIVACY PATH: send `id` + a client-computed `version` and NO query_text at all —
+ * you keep prompt versioning and every cost/latency diff, and lose only the
+ * text-based prompt-quality checks.
+ *
+ * NOTE the keys are FLAT: opexia.prompt_id, NOT opexia.prompt.id (a dotted
+ * opexia.prompt.* key is not in the envelope and dead-letters the span).
+ */
+export function setOpexiaPrompt(
+  span: Span,
+  p: { id?: string; label?: string; version?: string },
+): void {
+  if (p.id) span.setAttribute("opexia.prompt_id", p.id);
+  if (p.label) span.setAttribute("opexia.prompt_label", p.label);
+  if (p.version) span.setAttribute("opexia.prompt_version", p.version);
 }
 
 /** gen_ai.* — standard OTel GenAI semconv. Cost is inferred server-side if omitted. */

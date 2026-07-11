@@ -104,6 +104,13 @@ Any other `opexia.*` key dead-letters the span. Allowed keys:
 | `opexia.plan` | JSON string | opaque structured plan |
 | `opexia.cost.usd` | float | flat scalar |
 | `opexia.cost.model_pricing_version` | string | flat scalar |
+| `opexia.prompt_id` | string | optional — pins a prompt's identity for Ship Check (RULE 4) |
+| `opexia.prompt_label` | string | optional — human name shown instead of a hash |
+| `opexia.prompt_version` | string | optional — client-computed version hash (RULE 4) |
+
+Note these three are **flat and un-dotted** — `opexia.prompt_id`, NOT
+`opexia.prompt.id`. A dotted `opexia.prompt.*` key is not in the envelope and
+dead-letters the span.
 
 Do **not** set `opexia.reliability` — the server computes it. `gen_ai.*` keys
 (model, tokens, system) are allowed and are NOT under the `opexia.*` `extra=forbid`
@@ -154,6 +161,60 @@ Two silent-emptiness traps:
 
 ---
 
+## RULE 4 — on an LLM span, `query_text` is the PROMPT, and it needs role boundaries
+
+On a span that represents an **LLM call** (it carries `gen_ai.request.model` and
+token counts), OpexIA reads `opexia.query_text` as **the rendered prompt** — that
+is what Ship Check versions and evaluates, and what the Savings Advisor measures a
+cacheable prefix from.
+
+**The trap (it is silent, and it destroys the prompt registry):** if you render the
+prompt by concatenating the messages' content with a space —
+
+```python
+# ❌ WRONG — no boundary between the authored prompt and the per-call content
+qt = " ".join(m["content"] for m in messages)
+```
+
+— then nothing separates the developer's authored system prompt from the user's
+question. OpexIA derives a prompt's identity by masking out the per-call parts, and
+with no boundary it cannot find them: **every call hashes as its own "prompt"**, and
+the Prompts page fills with thousands of one-call rows instead of one prompt with a
+version history. Render the messages with **role headers**:
+
+```python
+# ✅ CORRECT — the boundary is visible, so the per-call content can be masked out
+qt = "\n\n".join(f"{m['role']}:\n{m['content']}" for m in messages)
+span.set_attribute("opexia.query_text", qt[:16384])
+```
+```typescript
+// ✅ CORRECT (TS)
+const qt = messages.map(m => `${m.role}:\n${m.content}`).join("\n\n");
+span.setAttribute("opexia.query_text", qt.slice(0, 16384));
+```
+
+The `opexia-trace` SDK (>= 0.1.0a13) does this for you on the auto-instrument path.
+On the **direct-HTTP and native-OTLP routes you are rendering the text yourself**, so
+this rule is on you.
+
+**Pinning the identity (optional, recommended for teams using the CI gate).** Set
+`opexia.prompt_id` to a stable name of your own (`"triage"`, `"summarizer"`) and
+OpexIA uses it instead of the derived hash — grouping becomes exact, and
+`opexia shipcheck` can match a changed prompt to its baseline without guessing.
+`opexia.prompt_label` gives it a display name.
+
+**Privacy path:** a workspace that will not send prompt text can compute the version
+hash client-side, send `opexia.prompt_id` + `opexia.prompt_version` and **no
+`query_text` at all**. They keep prompt versioning and every cost/latency diff; they
+lose only the text-based prompt-quality checks.
+
+**Also cheap and worth setting on an LLM span:** `gen_ai.request.temperature` and
+`gen_ai.request.max_tokens` (standard OTel GenAI keys, not under the `opexia.*`
+envelope). They are part of the shipped config, so a temperature change with an
+unchanged prompt is still caught as a change.
+
+---
+
 ## Workflow (follow in order)
 
 1. **Detect** the stack from `pyproject.toml` / `requirements.txt` / `*.py` and
@@ -161,9 +222,11 @@ Two silent-emptiness traps:
    Node). State findings.
 2. **Read `routes.md`** and pick the route (RULE 2). Announce it and the reason.
 3. **Install** the dependency the idiomatic way. Pins that are load-bearing:
-   - Python SDK: `pip install --upgrade --pre "opexia-trace>=0.1.0a12"`
+   - Python SDK: `pip install --upgrade --pre "opexia-trace>=0.1.0a13"`
      (the `--pre` is REQUIRED — every release is an alpha; `<0.1.0a12`
-     dead-letters every auto-instrumented span). Add `[litellm]` if litellm present.
+     dead-letters every auto-instrumented span, and `<0.1.0a13` space-joins the
+     captured prompt so the prompt registry splits per call — RULE 4). Add
+     `[litellm]` if litellm present.
    - Native OTLP (Python): `opentelemetry-sdk opentelemetry-exporter-otlp-proto-http`.
    - Next.js / Node: `@vercel/otel @opentelemetry/api` (or `@opentelemetry/sdk-*`).
 4. **Instrument** by adapting the matching template to the user's real
@@ -186,6 +249,9 @@ Two silent-emptiness traps:
 - `.env.example` carries the canonical placeholders, matching the code.
 - One span has been emitted and **verified present in OpexIA with zero
   dead-letters** (and non-empty text if text was configured).
+- If you instrumented **LLM call spans** and are rendering `query_text` yourself
+  (direct-HTTP / native-OTLP routes), the prompt is rendered with **role headers**
+  (RULE 4) — not a space-join. Otherwise the prompt registry splits per call.
 - You told the user which route you used, why, and what env values they must fill in.
 
 Report honestly: if the verify step could not run (no network, missing key),
