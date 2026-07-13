@@ -27,9 +27,20 @@ __all__ = [
     "decide", "classify", "render", "Meter", "DriftMonitor",
     "BlockHint", "BlockLabel", "Decision", "Geometry", "ImageWithFactsheet",
     "KeepText", "ModelProfile", "Rendered",
+    # in-code integration (Pattern A) — imported lazily below to avoid an import cycle
+    "to_anthropic", "to_openai", "compress_anthropic",
 ]
 
 __version__ = "0.1.0"
+
+
+def __getattr__(name: str):
+    # lazy re-export: integrations imports pxcore, so bind these on first access, not at
+    # module load, to avoid a circular import.
+    if name in ("to_anthropic", "to_openai", "compress_anthropic"):
+        from pxcore import integrations
+        return getattr(integrations, name)
+    raise AttributeError(f"module 'pxcore' has no attribute {name!r}")
 
 
 def decide(block: str, profile: ModelProfile, *,

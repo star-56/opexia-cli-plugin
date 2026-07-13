@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import base64
 import os
-import re
-import subprocess
 from typing import Any, Dict, List, Optional
 
 import pxcore
+from pxcore import ops
 from pxcore.calibration import load_profile
 from pxcore.meter import Meter
 from pxcore.types import BlockHint, ImageWithFactsheet
@@ -47,56 +46,22 @@ def _content_for(text: str, *, hint: Optional[BlockHint] = None,
 # --- tool implementations ---------------------------------------------------
 
 def tool_read(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-    path = str(arguments.get("path", ""))
-    if not path or not os.path.isfile(path):
-        return [{"type": "text", "text": f"pxcore_read: no such file: {path}"}]
-    try:
-        text = open(path, "r", encoding="utf-8", errors="replace").read()
-    except OSError as e:
-        return [{"type": "text", "text": f"pxcore_read: {e}"}]
     # a file the agent asked to READ is reference by default; if it will edit it, it should
     # use its native editor, not this tool.
-    return _content_for(text, header=f"# {path}\n")
+    text, header = ops.read_file(str(arguments.get("path", "")))
+    return _content_for(text, header=header)
 
 
 def tool_run(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-    command = str(arguments.get("command", ""))
-    if not command:
-        return [{"type": "text", "text": "pxcore_run: no command"}]
-    try:
-        proc = subprocess.run(command, shell=True, capture_output=True, text=True,
-                              timeout=float(arguments.get("timeout", 120)))
-    except subprocess.TimeoutExpired:
-        return [{"type": "text", "text": f"pxcore_run: timed out: {command}"}]
-    out = (proc.stdout or "") + (("\n[stderr]\n" + proc.stderr) if proc.stderr else "")
-    return _content_for(out, header=f"$ {command}  (exit {proc.returncode})\n")
+    text, header = ops.run_command(str(arguments.get("command", "")),
+                                   float(arguments.get("timeout", 120)))
+    return _content_for(text, header=header)
 
 
 def tool_grep(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-    pattern = str(arguments.get("pattern", ""))
-    path = str(arguments.get("path", "."))
-    if not pattern:
-        return [{"type": "text", "text": "pxcore_grep: no pattern"}]
-    try:
-        rx = re.compile(pattern)
-    except re.error as e:
-        return [{"type": "text", "text": f"pxcore_grep: bad pattern: {e}"}]
-    hits: List[str] = []
-    for root, dirs, files in os.walk(path):
-        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "__pycache__")]
-        for fn in files:
-            fp = os.path.join(root, fn)
-            try:
-                for i, line in enumerate(open(fp, "r", encoding="utf-8",
-                                              errors="replace"), 1):
-                    if rx.search(line):
-                        hits.append(f"{fp}:{i}: {line.rstrip()}")
-                        if len(hits) >= 5000:
-                            break
-            except OSError:
-                continue
-    body = "\n".join(hits) if hits else "(no matches)"
-    return _content_for(body, header=f"grep {pattern!r} in {path}\n")
+    text, header = ops.grep_files(str(arguments.get("pattern", "")),
+                                  str(arguments.get("path", ".")))
+    return _content_for(text, header=header)
 
 
 def tool_view(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
