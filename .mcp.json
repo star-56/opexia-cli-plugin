@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pxcore": {
+      "command": "python",
+      "args": ["-m", "pxcore_mcp"],
+      "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/vendor",
+        "PXCORE_MODEL": "claude-fable-5"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "_note": "PROVISIONAL — the geometry and chars_per_vision_token are reasonable defaults, but fidelity_scores are 0 on purpose: no real Fable-5 battery run has been done in-house yet, so this profile images NOTHING until one is. Do not hand-set these scores. Run `pxcore` against a live Fable-5 with the calibration battery, let it write the real numbers, then promote source to 'prebaked'. A score asserted without a battery run is the exact 'measured nothing' failure this product refuses to make.",
+  "model_id": "claude-fable-5",
+  "geometry": {
+    "page_w": 1568,
+    "page_h": 728,
+    "cell_w": 8,
+    "cell_h": 8,
+    "resample_cap": 1568,
+    "pad": 2
+  },
+  "chars_per_vision_token": 3.1,
+  "fidelity_scores": {
+    "exact": 0.0,
+    "reference": 0.0
+  },
+  "fidelity_floor": 0.9,
+  "calibrated_at": "",
+  "battery_version": 1,
+  "source": "provisional"
+}

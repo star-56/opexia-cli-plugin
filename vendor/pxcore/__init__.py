@@ -1,0 +1,83 @@
+# pxcore — deterministic image-as-context token compression (shared core).
+#
+# One public question, answered per content block:  IMAGE this, or KEEP it as text?
+#
+#   decide(block, profile) -> KeepText(reason)  |  ImageWithFactsheet(png, factsheet, saved)
+#
+# Pipeline:  classify -> profitable? -> safe? -> render(+factsheet) -> meter
+# No LLM anywhere in this path. No third-party import in the core. Every KeepText states a
+# reason; imaging is default-off and earned by calibration.
+from __future__ import annotations
+
+from typing import Optional
+
+from pxcore import gate as _gate
+from pxcore.classifier import classify
+from pxcore.drift import DriftMonitor
+from pxcore.fidelity import is_safe_to_image
+from pxcore.meter import Meter
+from pxcore.renderer import render
+from pxcore.renderer import fits_one_page as _fits_one_page
+from pxcore.types import (
+    BlockHint, BlockLabel, Decision, Geometry, ImageWithFactsheet, KeepText,
+    ModelProfile, Rendered,
+)
+
+__all__ = [
+    "decide", "classify", "render", "Meter", "DriftMonitor",
+    "BlockHint", "BlockLabel", "Decision", "Geometry", "ImageWithFactsheet",
+    "KeepText", "ModelProfile", "Rendered",
+]
+
+__version__ = "0.1.0"
+
+
+def decide(block: str, profile: ModelProfile, *,
+           hint: Optional[BlockHint] = None,
+           meter: Optional[Meter] = None,
+           drift: Optional[DriftMonitor] = None) -> Decision:
+    """Decide image-vs-text for one block. Deterministic given (block, profile)."""
+    label = classify(block, hint)
+
+    # 1. profitability — is imaging even a token win?
+    if not _gate.is_profitable(label, profile, len(block)):
+        return _keep(meter, profile, label,
+                     "not a token win (sparse or below size floor)")
+
+    # 2. safety — is imaging PROVEN safe for this model x class?
+    safe, reason = is_safe_to_image(label, profile)
+    if not safe:
+        return _keep(meter, profile, label, reason)
+
+    # 2b. live drift override — a model that is failing probes NOW is demoted regardless of
+    # what its stored profile claims.
+    if drift is not None and drift.is_demoted(profile.model_id, "reference",
+                                              profile.fidelity_floor):
+        return _keep(meter, profile, label,
+                     "reference fidelity has drifted below floor - demoted to text")
+
+    # 2c. one-page fit — never silently truncate imaged content. A block too big for a capped
+    # page stays text; dropping imaged rows with no error is the exact failure we forbid.
+    if not _fits_one_page(block, profile.geometry):
+        return _keep(meter, profile, label,
+                     "too large for one page at the resample cap - staying text (no silent "
+                     "truncation)")
+
+    # 3. render + factsheet
+    r: Rendered = render(block, profile.geometry, with_factsheet=True)
+    saved = max(0, label.est_text_tokens - r.est_image_tokens)
+    if meter is not None:
+        meter.record(model_id=profile.model_id, decision="image",
+                     text_tokens=label.est_text_tokens, image_tokens=r.est_image_tokens,
+                     saved=saved, reason=reason)
+    return ImageWithFactsheet(png=r.png, factsheet=r.factsheet, saved_tokens=saved,
+                              width=r.width, height=r.height, label=label)
+
+
+def _keep(meter: Optional[Meter], profile: ModelProfile, label: BlockLabel,
+          reason: str) -> KeepText:
+    if meter is not None:
+        meter.record(model_id=profile.model_id, decision="text",
+                     text_tokens=label.est_text_tokens, image_tokens=0, saved=0,
+                     reason=reason)
+    return KeepText(reason=reason, label=label)

@@ -78,6 +78,30 @@ paths** where a secret can reach an external endpoint. Its headline is a committ
 shipcheck`, the PR comment gets the verdict and finding *categories* only; the
 evidence stays local, never posted.
 
+## pxcore token compression — bundled MCP tools
+
+The plugin bundles **pxcore** (pure stdlib, under `vendor/`) and registers an MCP server, so
+four token-saving tools are available in Claude Code: `pxcore_read`, `pxcore_run`,
+`pxcore_grep`, `pxcore_view`. They render **dense, reference** output (large file reads,
+command output, logs) as an image the model reads with its **native vision** — cutting input
+tokens — while keeping anything the model must reproduce verbatim (ids, paths, hashes, code
+you edit) as text. Deterministic, **no LLM in the compression path**, and **nothing it
+processes leaves the machine**.
+
+Run `/opexia:compress` to set it up. **Two honest gates before it actually compresses** (until
+then it safely returns text):
+
+1. **Calibrate the active model.** The shipped Fable-5 profile is *provisional* — it images
+   nothing until a real calibration run measures how reliably the model reads imaged text.
+   Imaging is default-off per model and *earned* by calibration.
+2. **Confirm image passthrough** — verify an image returned by an MCP tool reaches the model
+   as image tokens, not flattened text (one-time check).
+
+For bigger savings (the system prompt + history, which an MCP tool can't reach), run the
+separate **`pxcore-proxy`** CLI and point Claude Code at it with `ANTHROPIC_BASE_URL` — see
+`/opexia:compress proxy`. The proxy is a standalone CLI (needs `httpx`), not part of this
+plugin's MCP bundle.
+
 ## Install
 
 **Local (from this monorepo):**
