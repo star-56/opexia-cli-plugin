@@ -53,6 +53,31 @@ opexia shipcheck            # exit 1 = the policy failed; 2 = the check could no
 Set `opexia.prompt_id` on your LLM spans (the plugin will offer to) so the gate can
 match a changed prompt to its baseline exactly.
 
+## Agent map & security audit — for the agentic projects this plugin instruments
+
+The projects this plugin targets — apps with MCP servers, subagents, tools, and
+hooks — are exactly the ones with an agent-security attack surface. `opexia audit`
+(ships in `opexia-trace`, and runs automatically as a third gate of `opexia
+shipcheck`) maps that whole system and audits it against the NSA's *Model Context
+Protocol: Security Design Considerations*. It is **100% local and zero-egress: no
+network call, no LLM, and nothing it finds ever leaves your machine** — a
+vulnerability report must not itself disclose the vulnerability.
+
+```bash
+opexia audit --map agentmap.html    # writes a self-contained, offline HTML map
+```
+
+It draws your agents / servers / tools / hooks as an interactive map coloured by
+trust zone (a **red edge is a private→internet path**), and flags: poisoned tool
+descriptions (incl. **hidden-unicode** injection), cleartext credentials (shape
+only, never the value), **unpinned `npx -y` / `uvx` servers** that run arbitrary
+code on boot, shell-spawning servers, tool-name collisions, and **exfiltration
+paths** where a secret can reach an external endpoint. Its headline is a committed
+`.opexia/agentmap.lock`: a trusted server silently changing its tools — the
+"rug-pull" — becomes a reviewable **diff in your PR**. When run inside `opexia
+shipcheck`, the PR comment gets the verdict and finding *categories* only; the
+evidence stays local, never posted.
+
 ## Install
 
 **Local (from this monorepo):**

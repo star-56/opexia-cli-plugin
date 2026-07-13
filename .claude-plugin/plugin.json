@@ -1,7 +1,7 @@
 {
   "name": "opexia",
-  "description": "Instrument any project for OpexIA observability — detects the stack, picks native OTLP vs the opexia-trace SDK vs direct HTTP, wires it correctly, and verifies a span lands.",
-  "version": "0.2.0",
+  "description": "Instrument any project for OpexIA observability — detects the stack, picks native OTLP vs the opexia-trace SDK vs direct HTTP, wires it correctly, and verifies a span lands. Knows the CI-side companions: `opexia shipcheck` (prompt/cost PR gate) and `opexia audit` (local, zero-egress agent map + security audit).",
+  "version": "0.3.0",
   "author": {
     "name": "OpexIA"
   },
