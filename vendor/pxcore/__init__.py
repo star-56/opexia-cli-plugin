@@ -74,9 +74,16 @@ def decide(block: str, profile: ModelProfile, *,
                      "too large for one page at the resample cap - staying text (no silent "
                      "truncation)")
 
-    # 3. render + factsheet
+    # 3. render, then the FINAL profitability check against real dimensions. The gate in §1
+    # used a density heuristic; only now do we know the actual image-token cost. Narrow/short
+    # or not-dense-enough content can render to a page whose pixel cost >= the text it
+    # replaces — imaging that would INCREASE tokens. Never image at a net loss.
     r: Rendered = render(block, profile.geometry, with_factsheet=True)
-    saved = max(0, label.est_text_tokens - r.est_image_tokens)
+    saved = label.est_text_tokens - r.est_image_tokens
+    if saved <= 0:
+        return _keep(meter, profile, label,
+                     "imaging would not reduce tokens for this content "
+                     "(image cost >= text cost)")
     if meter is not None:
         meter.record(model_id=profile.model_id, decision="image",
                      text_tokens=label.est_text_tokens, image_tokens=r.est_image_tokens,

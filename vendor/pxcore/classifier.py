@@ -11,13 +11,21 @@ from typing import Optional
 from pxcore.renderer import extract_exact_spans
 from pxcore.types import BlockHint, BlockLabel
 
-# Token estimate without a tokenizer dep. Density-aware and DELIBERATELY conservative: dense
-# code/JSON/logs tokenize denser (more tokens per char) than prose, so imaging saves more on
-# it. ~2.5 chars/token dense, ~4 chars/token prose. Kept consistent with gate.py's model so
-# the savings figure never claims more than the gate's own assumption.
-def _est_tokens(text: str, density: str) -> int:
-    per_token = 2.5 if density == "dense" else 4.0
-    return max(1, int(len(text) / per_token))
+# Token estimate without a tokenizer dep. CONTENT-AWARE chars/token, derived from the
+# non-alphabetic character ratio: prose is mostly long alpha words (~3.8-4 chars/token),
+# while code/JSON/logs are symbol/digit/quote heavy and tokenize denser (~2.6 chars/token).
+# This is what the FINAL net-loss guard in decide() trusts, so it must NOT be optimistic on
+# prose — over-imaging prose is a real token INCREASE, not a saving (measured: a markdown
+# chunk imaged at chars/2.5 came out +12.6% tokens). A flat divisor could not tell prose from
+# JSON; this ratio can.
+def _est_tokens(text: str) -> int:
+    non_space = sum(1 for c in text if not c.isspace())
+    if non_space == 0:
+        return 1
+    alpha = sum(1 for c in text if c.isalpha())
+    non_alpha_ratio = (non_space - alpha) / non_space
+    cpt = 4.0 - 1.4 * min(1.0, non_alpha_ratio / 0.45)
+    return max(1, int(len(text) / cpt))
 
 
 _CODE_MARKERS = re.compile(
@@ -71,6 +79,6 @@ def classify(text: str, hint: Optional[BlockHint] = None) -> BlockLabel:
         density=density,
         fidelity_class=fidelity_class,
         role=role,
-        est_text_tokens=_est_tokens(text, density),
+        est_text_tokens=_est_tokens(text),
         exact_spans=exact_spans,
     )
