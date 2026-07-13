@@ -60,10 +60,14 @@ def _state_items() -> List[Tuple[str, str]]:
 
 
 def build_probes(geometry: Geometry) -> List[Probe]:
+    # Probe class -> content class it calibrates:
+    #   arith -> GIST   (read a value in place and use it)
+    #   hex   -> EXACT  (reproduce a verbatim string)
+    #   state -> LOOKUP (find the value for a given key among many rows)
     probes: List[Probe] = []
     for i, (q, a) in enumerate(_arith_items()):
         r = render(q, geometry, with_factsheet=False)
-        probes.append(Probe(f"arith_{i}", "reference", r.png,
+        probes.append(Probe(f"arith_{i}", "gist", r.png,
                             "Read the arithmetic in the image and give only the number.",
                             a, "numeric"))
     for i, (q, a) in enumerate(_hex_items()):
@@ -73,7 +77,7 @@ def build_probes(geometry: Geometry) -> List[Probe]:
                             a, "exact"))
     for i, (q, a) in enumerate(_state_items()):
         r = render(q, geometry, with_factsheet=False)
-        probes.append(Probe(f"state_{i}", "reference", r.png,
+        probes.append(Probe(f"state_{i}", "lookup", r.png,
                             "Read the table in the image and answer.", a, "exact"))
     return probes
 
@@ -112,8 +116,8 @@ def derive_profile(model_id: str, geometry: Geometry, results: List[ProbeResult]
                    chars_per_vision_token: float, fidelity_floor: float = 0.9,
                    calibrated_at: str = "") -> ModelProfile:
     scores = aggregate(results)
-    scores.setdefault("exact", 0.0)
-    scores.setdefault("reference", 0.0)
+    for cls in ("exact", "gist", "lookup"):
+        scores.setdefault(cls, 0.0)
     return ModelProfile(
         model_id=model_id,
         geometry=geometry,
@@ -152,11 +156,11 @@ def run_battery(model_id: str, ask: AskModel, *,
         prof = derive_profile(model_id, g, results,
                               chars_per_vision_token=chars_per_vision_token,
                               fidelity_floor=fidelity_floor, calibrated_at=calibrated_at)
-        ref = prof.fidelity("reference")
+        ref = prof.fidelity("gist")     # gist gates the bulk of imageable content
         # rank: prefer clearing the floor; among those, denser cell = more chars/token.
         rank = (1 if ref >= fidelity_floor else 0, g.cols * g.rows)
         if best is None or rank > best[1] or (best is not None and rank == best[1]
-                                              and ref > best[0].fidelity("reference")):
+                                              and ref > best[0].fidelity("gist")):
             best = (prof, rank)   # type: ignore[assignment]
 
     return best[0] if best else derive_profile(model_id, geometries[0], [],

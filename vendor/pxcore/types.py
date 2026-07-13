@@ -11,7 +11,15 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 # --- classification axes ----------------------------------------------------
 
 Density = Literal["dense", "sparse"]
-FidelityClass = Literal["exact", "reference"]
+# Three content classes, split by HOW a model must read the content — grounded in live
+# calibration data (Fable-5 & Opus): models read imaged content well in some modes and fail
+# in others, so one bar can't gate all of it.
+#   exact  — must be reproduced byte-for-byte (ids/hashes/paths). ALWAYS text (factsheet).
+#   gist   — read to comprehend/reason over (code, logs, varied output). Models are GOOD at
+#            this (arith 100%, hex 87-100%); it is the content pxpipe-class savings come from.
+#   lookup — must find a specific value by key in a large uniform set (tables/record lists).
+#            Models are BAD at this (Fable 0/10, Opus 5/10) — a needle in a pixel haystack.
+FidelityClass = Literal["exact", "gist", "lookup"]
 Role = Literal["edit_target", "read_only"]
 
 
@@ -58,7 +66,7 @@ class ModelProfile:
     model_id: str
     geometry: Geometry
     chars_per_vision_token: float           # measured density of imaged dense text
-    fidelity_scores: Dict[str, float]       # {"exact": 0..1, "reference": 0..1} pass-rates
+    fidelity_scores: Dict[str, float]       # {"exact":0..1,"gist":0..1,"lookup":0..1} pass-rates
     fidelity_floor: float                   # the enable threshold
     calibrated_at: str = ""                 # ISO date; "" = never run a real battery
     battery_version: int = 1

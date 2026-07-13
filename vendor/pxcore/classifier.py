@@ -6,10 +6,40 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import Optional
 
 from pxcore.renderer import extract_exact_spans
 from pxcore.types import BlockHint, BlockLabel
+
+
+def _line_shape(line: str) -> str:
+    """Normalize a line to its structural shape: digits -> #, quoted strings -> "", collapsed
+    whitespace. Two rows of a uniform table map to the same shape."""
+    s = re.sub(r"\d+", "#", line)
+    s = re.sub(r'"[^"]*"', '""', s)
+    s = re.sub(r"\s+", " ", s.strip())
+    return s[:48]
+
+
+_KEY_FIELD = re.compile(r'"(?:\w*_?id|key|uuid|name|code)"\s*:', re.I)
+
+
+def _is_lookup(text: str) -> bool:
+    """Is this a keyed record-set someone would query by key (the lookup-risk structure)?
+    Requires BOTH: (a) uniform rows (one dominant line-shape), AND (b) most rows carry an
+    explicit id/key field. Free-form logs are uniform but NOT keyed, so they default to gist
+    (which is correct — logs are read for comprehension, and imaging them is a real, safe
+    saving that pxpipe exploits). Default gist, escalate to lookup only on a clear signal."""
+    lines = [ln for ln in text.split("\n") if ln.strip()]
+    if len(lines) < 20:
+        return False
+    shapes = Counter(_line_shape(ln) for ln in lines)
+    uniform = shapes.most_common(1)[0][1] / len(lines) > 0.5
+    if not uniform:
+        return False
+    keyed = sum(1 for ln in lines if _KEY_FIELD.search(ln))
+    return keyed / len(lines) > 0.5
 
 # Token estimate without a tokenizer dep. CONTENT-AWARE chars/token, derived from the
 # non-alphabetic character ratio: prose is mostly long alpha words (~3.8-4 chars/token),
@@ -59,15 +89,23 @@ def classify(text: str, hint: Optional[BlockHint] = None) -> BlockLabel:
 
     exact_spans = tuple(extract_exact_spans(text))
 
-    # fidelity_class: a block is EXACT if it is dominated by content the model must reproduce
-    # verbatim — lots of ids/paths/hashes relative to its size — or the adapter said so.
+    # fidelity_class — the three-way split. The adapter's hint wins (it knows the task); else:
+    #   EXACT   if dominated by verbatim tokens (ids/hashes/paths);
+    #   LOOKUP  if it is a large UNIFORM table/record list (find-value-by-key is the risk);
+    #   GIST    otherwise (code/logs/varied output the model reads to reason over).
     if hint.fidelity_class is not None:
         fidelity_class = hint.fidelity_class
     else:
         exact_chars = sum(len(s) for s in exact_spans)
         density_of_exact = exact_chars / max(1, len(text))
-        # dominated by exact tokens → treat the whole thing as exact (keep it as text).
-        fidelity_class = "exact" if density_of_exact > 0.25 else "reference"
+        if density_of_exact > 0.25:
+            fidelity_class = "exact"
+        elif _is_lookup(text):
+            # a uniform KEYED record-set — the model can't reliably locate one row by key in a
+            # dense image, so this needs the (high) lookup fidelity bar.
+            fidelity_class = "lookup"
+        else:
+            fidelity_class = "gist"
 
     # role: edit_target if the adapter says so, or it looks like a source file body.
     if hint.role is not None:

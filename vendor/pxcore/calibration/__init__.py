@@ -65,7 +65,7 @@ def unknown_profile(model_id: str) -> ModelProfile:
         # neutral density so the block reaches the FIDELITY gate and is refused there with the
         # honest "not proven safe" reason, rather than being quietly dropped as "unprofitable".
         chars_per_vision_token=3.1,
-        fidelity_scores={"exact": 0.0, "reference": 0.0},
+        fidelity_scores={"exact": 0.0, "gist": 0.0, "lookup": 0.0},
         fidelity_floor=UNKNOWN_FLOOR,
         source="prebaked",
     )

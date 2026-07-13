@@ -61,11 +61,11 @@ def decide(block: str, profile: ModelProfile, *,
         return _keep(meter, profile, label, reason)
 
     # 2b. live drift override — a model that is failing probes NOW is demoted regardless of
-    # what its stored profile claims.
-    if drift is not None and drift.is_demoted(profile.model_id, "reference",
+    # what its stored profile claims. Checked against THIS block's content class.
+    if drift is not None and drift.is_demoted(profile.model_id, label.fidelity_class,
                                               profile.fidelity_floor):
         return _keep(meter, profile, label,
-                     "reference fidelity has drifted below floor - demoted to text")
+                     f"{label.fidelity_class} fidelity has drifted below floor - demoted to text")
 
     # 2c. one-page fit — never silently truncate imaged content. A block too big for a capped
     # page stays text; dropping imaged rows with no error is the exact failure we forbid.

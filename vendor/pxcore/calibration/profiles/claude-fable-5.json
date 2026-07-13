@@ -12,7 +12,8 @@
   "chars_per_vision_token": 3.1,
   "fidelity_scores": {
     "exact": 0.0,
-    "reference": 0.0
+    "gist": 0.0,
+    "lookup": 0.0
   },
   "fidelity_floor": 0.9,
   "calibrated_at": "",
