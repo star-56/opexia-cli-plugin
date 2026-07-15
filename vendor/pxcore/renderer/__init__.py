@@ -76,13 +76,31 @@ def _clamp_geometry(g: Geometry, rows_needed: int, cols_needed: int) -> Geometry
     return Geometry(page_w, page_h, g.cell_w, g.cell_h, g.resample_cap, g.pad)
 
 
+def _max_rows(geometry: Geometry) -> int:
+    return max(1, (geometry.resample_cap - 2 * geometry.pad) // geometry.cell_h)
+
+
 def fits_one_page(text: str, geometry: Geometry) -> bool:
-    """Does the whole block fit one capped page? If not, the caller must keep it as text —
-    silently truncating imaged content would drop data with no error, the exact failure this
-    product exists to avoid."""
+    """Does the whole block fit one capped page? If not, the caller must keep it as text OR
+    paginate it (see paginate) — silently truncating imaged content would drop data with no
+    error, the exact failure this product exists to avoid."""
+    return len(_wrap(text, geometry.cols)) <= _max_rows(geometry)
+
+
+def paginate(text: str, geometry: Geometry) -> List[str]:
+    """Split a block into page-sized text chunks, each guaranteed to fit ONE capped page.
+
+    Wrapping-aware: the block is wrapped to the page width first, then its rows are grouped
+    into pages of at most _max_rows(geometry) rows. A block that already fits one page returns
+    [text] unchanged (so the single-page path stays byte-identical — cache-safe). This is what
+    lets an oversized block image across MULTIPLE pages instead of falling to keep-text: every
+    row lands on exactly one page, so there is no silent truncation. Each returned chunk, when
+    re-wrapped by render() at the same width, is a no-op re-wrap and therefore fits_one_page."""
     lines = _wrap(text, geometry.cols)
-    max_rows = (geometry.resample_cap - 2 * geometry.pad) // geometry.cell_h
-    return len(lines) <= max_rows
+    mr = _max_rows(geometry)
+    if len(lines) <= mr:
+        return [text]
+    return ["\n".join(lines[i:i + mr]) for i in range(0, len(lines), mr)]
 
 
 def _blank_page(w: int, h: int) -> List[bytearray]:

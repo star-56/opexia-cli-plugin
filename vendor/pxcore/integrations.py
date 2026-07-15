@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pxcore
 from pxcore.calibration import load_profile
+from pxcore.renderer import paginate
 from pxcore.types import BlockHint, ImageWithFactsheet, ModelProfile
 
 
@@ -70,14 +71,31 @@ def _text_block(text: str, cache_control: Optional[Dict[str, Any]] = None) -> Di
 
 def _rewrite_text(text: str, profile: ModelProfile, *, hint: Optional[BlockHint],
                   cache_control: Optional[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
-    d = pxcore.decide(text, profile, hint=hint)
-    if isinstance(d, ImageWithFactsheet):
-        b64 = base64.b64encode(d.png).decode("ascii")
-        blocks = [_image_block(b64, cache_control)]
-        if d.factsheet:
-            blocks.append(_text_block(d.factsheet))
-        return blocks, d.saved_tokens
-    return [_text_block(text, cache_control)], 0
+    # Paginate first so a block bigger than one page images across MULTIPLE pages instead of
+    # falling to keep-text. A block that fits one page returns [text] → the original single
+    # path, byte-identical (cache-safe). Only the FIRST spliced block carries cache_control, so
+    # a deterministic render keeps the cached prefix intact.
+    pages = paginate(text, profile.geometry)
+    out: List[Dict[str, Any]] = []
+    saved = 0
+    imaged = False
+    for idx, pg in enumerate(pages):
+        cc = cache_control if idx == 0 else None
+        d = pxcore.decide(pg, profile, hint=hint)
+        if isinstance(d, ImageWithFactsheet):
+            imaged = True
+            b64 = base64.b64encode(d.png).decode("ascii")
+            out.append(_image_block(b64, cc))
+            if d.factsheet:
+                out.append(_text_block(d.factsheet))
+            saved += d.saved_tokens
+        else:
+            out.append(_text_block(pg, cc))
+    # If nothing imaged, emit the ORIGINAL undivided text (don't fragment a block for zero gain
+    # — keeps the message identical to the no-op case and the cache prefix intact).
+    if not imaged:
+        return [_text_block(text, cache_control)], 0
+    return out, saved
 
 
 def _rewrite_system(system: Any, profile: ModelProfile) -> Tuple[Any, int]:

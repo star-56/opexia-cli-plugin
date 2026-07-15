@@ -9,7 +9,7 @@
 # reason; imaging is default-off and earned by calibration.
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from pxcore import gate as _gate
 from pxcore.classifier import classify
@@ -18,13 +18,14 @@ from pxcore.fidelity import is_safe_to_image
 from pxcore.meter import Meter
 from pxcore.renderer import render
 from pxcore.renderer import fits_one_page as _fits_one_page
+from pxcore.renderer import paginate as _paginate
 from pxcore.types import (
     BlockHint, BlockLabel, Decision, Geometry, ImageWithFactsheet, KeepText,
     ModelProfile, Rendered,
 )
 
 __all__ = [
-    "decide", "classify", "render", "Meter", "DriftMonitor",
+    "decide", "decide_paged", "classify", "render", "Meter", "DriftMonitor",
     "BlockHint", "BlockLabel", "Decision", "Geometry", "ImageWithFactsheet",
     "KeepText", "ModelProfile", "Rendered",
     # in-code integration (Pattern A) — imported lazily below to avoid an import cycle
@@ -32,6 +33,12 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
+
+# A single oversized block paginates into at most this many page-images before we give up and
+# keep the whole thing as text. A ceiling exists so a pathological megablock cannot explode
+# into hundreds of images; each page below the cap still images only if IT alone wins, so this
+# is a blast-radius guard, not an economic one.
+DEFAULT_MAX_PAGES = 16
 
 
 def __getattr__(name: str):
@@ -90,6 +97,30 @@ def decide(block: str, profile: ModelProfile, *,
                      saved=saved, reason=reason)
     return ImageWithFactsheet(png=r.png, factsheet=r.factsheet, saved_tokens=saved,
                               width=r.width, height=r.height, label=label)
+
+
+def decide_paged(block: str, profile: ModelProfile, *,
+                 hint: Optional[BlockHint] = None,
+                 meter: Optional[Meter] = None,
+                 drift: Optional[DriftMonitor] = None,
+                 max_pages: int = DEFAULT_MAX_PAGES) -> List[Decision]:
+    """Multi-page decide: paginate an oversized block into page-sized chunks and run the FULL
+    decide() pipeline on each. Returns one Decision per page (a list of length 1 for a block
+    that already fits one page — so callers can treat single- and multi-page uniformly).
+
+    This is how content bigger than one page gets imaged instead of falling to keep-text: each
+    page is classified, safety-gated, one-page-fit-checked and net-loss-guarded on its OWN, so
+    a page images only if it alone is safe and a token win. No silent truncation — paginate()
+    places every row on exactly one page. Above max_pages the whole block stays text with a
+    stated reason (a blast-radius ceiling, never a silent drop)."""
+    pages = _paginate(block, profile.geometry)
+    if len(pages) <= 1:
+        return [decide(block, profile, hint=hint, meter=meter, drift=drift)]
+    if max_pages and len(pages) > max_pages:
+        return [_keep(meter, profile, classify(block, hint),
+                      f"block needs {len(pages)} pages (> cap {max_pages}) - staying text "
+                      "(no silent truncation)")]
+    return [decide(pg, profile, hint=hint, meter=meter, drift=drift) for pg in pages]
 
 
 def _keep(meter: Optional[Meter], profile: ModelProfile, label: BlockLabel,
