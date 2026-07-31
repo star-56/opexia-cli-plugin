@@ -18,6 +18,7 @@ four capabilities on top:
 | **Token compression** | `/opexia:compress` | Cuts the number of input tokens Claude Code spends reading bulky output — lower cost, more room in context. |
 | **Ship Check (PR gate)** | `opexia shipcheck` | Catches expensive or unsafe prompt/model changes *before* they merge. No AI call, runs in CI. |
 | **Agent map & security audit** | `opexia audit` | Draws a map of your agents/tools/servers and flags security issues. Runs entirely on your machine — nothing leaves it. |
+| **Live savings dashboard** | `opexia live` | A terminal dashboard of your token/$ savings in real time, updating as you work. Local and zero-network by default. |
 
 You do **not** need all four. Most teams start with `/opexia:instrument` and add
 the rest when they need them.
@@ -174,6 +175,26 @@ It produces a **self-contained, offline HTML map** you can open in any browser. 
 runs **100% on your machine** — no network call, nothing it finds ever leaves your
 computer.
 
+### 4e. Watch savings live — `opexia live`
+
+A live terminal dashboard you leave open in one pane while you work in Claude Code in
+another. It shows, in real time, your **with-pxcore vs without-pxcore** token and $
+savings — so you can see the compression working without opening a web dashboard.
+
+```
+pip install "opexia-trace[live]"
+opexia live                 # local, zero-network dashboard
+opexia live --local         # force zero-egress even if a key is set
+```
+
+- The **local view is always on and never touches the network** — it reads pxcore's
+  own savings log on your machine (`~/.pxcore/events.jsonl`).
+- If your project has an `OPEXIA_API_KEY` (the one `/opexia:instrument` writes), it
+  **also** shows read-only backend panels: model cost comparison, throughput/latency,
+  and Savings Advisor flags. `--local` turns that off.
+- Renders cleanly on macOS Terminal / iTerm2, Windows Terminal, and Linux; it falls
+  back to plain ASCII on older consoles automatically. Press **Ctrl-C** to exit.
+
 ---
 
 ## 5. Quick reference
@@ -193,6 +214,7 @@ computer.
 pip install "opexia-trace[shipcheck]"
 opexia shipcheck                # PR gate: cost/safety of prompt changes
 opexia audit --map agentmap.html   # local agent map + security audit
+opexia live                     # live terminal dashboard of token/$ savings
 ```
 
 ---
