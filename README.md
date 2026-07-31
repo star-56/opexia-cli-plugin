@@ -78,6 +78,35 @@ paths** where a secret can reach an external endpoint. Its headline is a committ
 shipcheck`, the PR comment gets the verdict and finding *categories* only; the
 evidence stays local, never posted.
 
+## `/opexia:secure` — prompt-injection hardening, under human review
+
+The same audit checks whether **every system instruction** in the project is
+defenseless against injection arriving at runtime — and names the injection **type**
+and the exact **mitigation** for each gap. `/opexia:secure` runs it, reads the local
+report, and walks you through the findings:
+
+- **Covers every instruction:** `CLAUDE.md`/`AGENTS.md`/`.cursorrules`, `.claude/agents`,
+  skills, in-code `system=`/`SYSTEM_PROMPT` literals, and your `prompts:` files — read
+  locally, sent nowhere. Non-literal prompts are counted and named, never faked.
+- **Applicability-gated:** a well-hardened prompt produces **zero findings** (correct,
+  not a miss). A secret sitting in a prompt is the one hard FAIL — reported by shape and
+  location, **never** its value.
+- **Human-in-the-loop:** it shows you each finding — injection type, citation
+  (OWASP LLM01 / NIST AI 100-2e2025 / MITRE ATLAS / NSA-CISA), and the proposed fix
+  (spotlighting/delimiters, an indirect-injection clause, an instruction hierarchy,
+  scoped authority, output constraints) — and writes the change **only after you say
+  yes.** A secret is flagged with a rotate-your-key warning, never auto-edited.
+
+```
+/opexia:secure                 # audit, then apply mitigations you approve
+/opexia:secure audit only      # report the findings, change nothing
+```
+
+Enforce it on every PR via the `audit.injection` policy block in `.opexia/shipcheck.yml`
+(`mode: warn` by default; `mode: fail` returns exit 1 and blocks the push). Like the map
+audit, it is **100% local and zero-egress** — the full report is an attacker's roadmap,
+so it never leaves your machine.
+
 ## pxcore token compression — bundled MCP tools
 
 The plugin bundles **pxcore** (pure stdlib, under `vendor/`) and registers an MCP server, so
@@ -149,7 +178,7 @@ tools/opexia-cli-plugin/
     plugin.json           # manifest (name: opexia)
     marketplace.json      # git-installable marketplace entry
   skills/instrument/
-    SKILL.md              # the decision procedure + wire contract + traps
+    SKILL.md              # the decision procedure + wire contract + traps (HITL-gated)
     routes.md             # per-route deep reference
     templates/            # correct-by-construction starting points
       python_sdk_init.py
@@ -160,5 +189,10 @@ tools/opexia-cli-plugin/
       verify_span.py
       verify_span.ts
       env.example.block
+  skills/secure/
+    SKILL.md              # /opexia:secure — prompt-injection audit + HITL mitigation
+  skills/compress/
+    SKILL.md              # /opexia:compress — pxcore token compression setup
+  vendor/                 # bundled pxcore (pure stdlib) for the compress MCP tools
   README.md
 ```

@@ -242,13 +242,41 @@ no API key and no spans.
 
 ---
 
+## RULE 6 — human-in-the-loop checkpoints: confirm before you install, edit, or egress
+
+Instrumentation touches the user's dependencies, their source files, and — at the
+verify step — the **network** (it sends a span, authenticated with their API key, to
+the ingest endpoint). None of those happen silently. Stop at each checkpoint below,
+show exactly what you are about to do, and **wait for a yes**. Detecting the stack and
+reading files is free and needs no gate; the gates are on the actions that change
+something or leave the machine.
+
+| 🛑 Checkpoint | Before you… | Show, then wait for yes |
+|---|---|---|
+| **1. Plan** | write or install anything | the route you chose + why (RULE 2), the exact files you will create/modify, and the dependency + version you will install. One consolidated approval. |
+| **2. Install** | run `pip install` / `npm install` | the exact command and pinned version (RULE 6 pins are load-bearing). Skip re-asking if it was covered in the Plan and unchanged. |
+| **3. Edit code** | modify the user's real entrypoints | the concrete diff/edit per file. Adapting a template into *their* code is a real change — never apply it unseen. |
+| **4. Egress (verify)** | run the verify probe | that it will **send one span over the network** to `OPEXIA_INGEST_URL` using their API key. This is the only step that leaves the machine — name it as such and get explicit consent before the call. |
+
+Writing **placeholders** into `.env.example` is low-risk (no secret, no egress) — fold
+it into the Plan; don't add a separate gate for it. If the user says "just do it" / "no
+need to confirm each step", honor that: collapse to the single Plan gate + the Egress
+gate (egress always gets its own confirmation — a network call with their key is not
+something to assume). If they pass `$ARGUMENTS` that already decides the route (e.g.
+"use direct http"), the Plan gate still applies, but you have less to ask.
+
+---
+
 ## Workflow (follow in order)
 
 1. **Detect** the stack from `pyproject.toml` / `requirements.txt` / `*.py` and
    `package.json` (inspect deps: `next`, `react-native`/`expo`, `react`, else
-   Node). State findings.
+   Node). State findings. *(No gate — reading only.)*
 2. **Read `routes.md`** and pick the route (RULE 2). Announce it and the reason.
-3. **Install** the dependency the idiomatic way. Pins that are load-bearing:
+3. **🛑 Checkpoint 1 — Plan.** Present the route + reason, the files you will
+   create/modify, and the dependency + version. **Wait for approval** (RULE 6).
+4. **Install** the dependency the idiomatic way — **🛑 Checkpoint 2** if not already
+   approved in the Plan. Pins that are load-bearing:
    - Python SDK: `pip install --upgrade --pre "opexia-trace>=0.1.0a13"`
      (the `--pre` is REQUIRED — every release is an alpha; `<0.1.0a12`
      dead-letters every auto-instrumented span, and `<0.1.0a13` space-joins the
@@ -256,20 +284,23 @@ no API key and no spans.
      `[litellm]` if litellm present.
    - Native OTLP (Python): `opentelemetry-sdk opentelemetry-exporter-otlp-proto-http`.
    - Next.js / Node: `@vercel/otel @opentelemetry/api` (or `@opentelemetry/sdk-*`).
-4. **Instrument** by adapting the matching template to the user's real
-   entrypoints and their `$ARGUMENTS` instruction. Copy `opexia_attributes.ts`
-   (or the Python equivalent in the template) into their project if they want the
-   `opexia.*` intelligence attributes. Obey RULE 0 / RULE 1 in every attribute.
-5. **Write env** — append the canonical placeholders from
+5. **Instrument** by adapting the matching template to the user's real
+   entrypoints and their `$ARGUMENTS` instruction — **🛑 Checkpoint 3: show the diff
+   per file and wait for yes** before applying. Copy `opexia_attributes.ts` (or the
+   Python equivalent in the template) into their project if they want the `opexia.*`
+   intelligence attributes. Obey RULE 0 / RULE 1 in every attribute.
+6. **Write env** — append the canonical placeholders from
    `templates/env.example.block` to the project's `.env.example` (create it if
    absent). **Placeholders only — never real secrets, never into a committed
    `.env`.** Use the SAME var names the generated init code reads (they come from
-   the same template, so they cannot drift).
-6. **Verify a span lands.** Run the matching probe
-   (`templates/verify_span.py` or `verify_span.ts`) — it emits one span and polls
-   the read path. Confirm: HTTP 2xx, `partialSuccess` empty / zero dead-letters,
-   and — if text was configured — `query_text`/`outcome_text` arrived NON-EMPTY.
-   If it dead-letters, diagnose against RULE 0/1/3 and fix before declaring done.
+   the same template, so they cannot drift). *(No separate gate — covered by the Plan.)*
+7. **Verify a span lands — 🛑 Checkpoint 4 (egress).** This step **sends a span over
+   the network** to `OPEXIA_INGEST_URL` with the user's API key — confirm before you
+   run it. Then run the matching probe (`templates/verify_span.py` or `verify_span.ts`):
+   it emits one span and polls the read path. Confirm: HTTP 2xx, `partialSuccess`
+   empty / zero dead-letters, and — if text was configured — `query_text`/`outcome_text`
+   arrived NON-EMPTY. If it dead-letters, diagnose against RULE 0/1/3 and fix before
+   declaring done.
 
 ## Definition of done
 - The chosen route is wired into the user's actual code, not a stub.
