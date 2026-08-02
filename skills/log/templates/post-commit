@@ -1,0 +1,82 @@
+#!/bin/sh
+# OpexIA dev-log — git post-commit hook.
+#
+# Installed by `/opexia:log init` into .git/hooks/post-commit. On EVERY commit it
+# writes a deterministic stub entry for that commit (sha, time, message, changed
+# files, parent link) into .opexia/devlog/entries/. The reasoning/logic and the
+# semantic graph edges are filled in later by Claude (the Stop hook prompts it).
+#
+# HARD RULES:
+#   * Never block or slow a commit. Every path exits 0.
+#   * No dependencies beyond git + POSIX sh (no jq / python).
+#   * No-op unless the repo opted in (the .opexia/devlog directory exists).
+
+set +e
+
+DEVLOG=".opexia/devlog"
+[ -d "$DEVLOG/entries" ] || exit 0        # feature not enabled here — do nothing
+
+SHA=$(git rev-parse HEAD 2>/dev/null) || exit 0
+SHA7=$(printf '%s' "$SHA" | cut -c1-7)
+TS=$(git show -s --format=%cI HEAD 2>/dev/null)          # ISO-8601 committer date
+DATE=$(git show -s --format=%cs HEAD 2>/dev/null)        # YYYY-MM-DD
+AUTHOR=$(git show -s --format=%an HEAD 2>/dev/null)
+SUBJECT=$(git show -s --format=%s HEAD 2>/dev/null)
+PARENT=$(git rev-parse --short=7 HEAD~1 2>/dev/null)     # empty for the root commit
+
+# Idempotency: if an entry for this sha already exists, stop.
+if ls "$DEVLOG/entries/"*"-$SHA7-"*.md >/dev/null 2>&1; then
+  exit 0
+fi
+
+# YAML-safe single-quoted scalar (escape ' as '').
+esc() { printf "%s" "$1" | sed "s/'/''/g"; }
+SUBJECT_ESC=$(esc "$SUBJECT")
+AUTHOR_ESC=$(esc "$AUTHOR")
+
+# Filename slug from the subject.
+SLUG=$(printf '%s' "$SUBJECT" | tr '[:upper:]' '[:lower:]' \
+        | sed 's/[^a-z0-9]\{1,\}/-/g; s/^-//; s/-$//' | cut -c1-40)
+[ -n "$SLUG" ] || SLUG="commit"
+FILE="$DEVLOG/entries/${DATE:-0000-00-00}-${SHA7}-${SLUG}.md"
+
+# Changed files as a YAML list.
+FILES=$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null)
+
+{
+  echo "---"
+  echo "id: cmt_${SHA7}"
+  echo "type: commit"
+  echo "sha: ${SHA}"
+  echo "timestamp: ${TS}"
+  echo "author: '${AUTHOR_ESC}'"
+  echo "message: '${SUBJECT_ESC}'"
+  echo "tags: []"
+  echo "enriched: false"
+  echo "files:"
+  if [ -n "$FILES" ]; then
+    printf '%s\n' "$FILES" | while IFS= read -r f; do
+      fe=$(esc "$f")
+      echo "  - '${fe}'"
+    done
+  fi
+  echo "relations:"
+  if [ -n "$PARENT" ]; then
+    echo "  - follows: cmt_${PARENT}"
+  fi
+  echo "---"
+  echo ""
+  echo "## What"
+  echo "_(stub — awaiting enrichment: what changed in this commit)_"
+  echo ""
+  echo "## Why / Logic"
+  echo "_(the approach and the reasoning: why it was done this way)_"
+  echo ""
+  echo "## Decisions"
+  echo "_(design choices made here + alternatives considered and rejected)_"
+  echo ""
+  echo "## Agent"
+  echo "_(which agent/model did this work; subagents involved)_"
+} > "$FILE" 2>/dev/null
+
+exit 0

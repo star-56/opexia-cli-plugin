@@ -1,0 +1,15 @@
+{
+  "description": "OpexIA dev-log — nudge Claude to enrich pending commit entries when it finishes a task (no-op unless the repo ran /opexia:log init).",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/devlog-stop.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

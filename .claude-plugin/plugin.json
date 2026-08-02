@@ -1,7 +1,7 @@
 {
   "name": "opexia",
-  "description": "OpexIA developer tooling for Claude Code: instrument any project for observability (native OTLP / opexia-trace SDK / direct HTTP, verified span landing); `/opexia:secure` — audit every system instruction for prompt-injection susceptibility and apply the mitigations under human review (local, zero-egress); the CI companions `opexia shipcheck` (prompt/cost PR gate) and `opexia audit` (local zero-egress agent map + security audit); and `pxcore` token compression — imaged-context tools that cut input tokens with a native-vision read, exact content kept as text.",
-  "version": "0.5.0",
+  "description": "OpexIA developer tooling for Claude Code: instrument any project for observability (native OTLP / opexia-trace SDK / direct HTTP, verified span landing); `/opexia:secure` — audit every system instruction for prompt-injection susceptibility and apply the mitigations under human review (local, zero-egress); `/opexia:log` — a local, agent-queryable relational dev-log: every git commit becomes a node in a committed knowledge graph (tasks, decisions, bugs, components + typed edges) that Claude enriches with the reasoning behind each change, so you can later traverse the build history to debug and trace what was built, when, and why; the CI companions `opexia shipcheck` (prompt/cost PR gate) and `opexia audit` (local zero-egress agent map + security audit); and `pxcore` token compression — imaged-context tools that cut input tokens with a native-vision read, exact content kept as text.",
+  "version": "0.6.0",
   "author": {
     "name": "OpexIA"
   },
